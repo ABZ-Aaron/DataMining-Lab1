@@ -1,0 +1,198 @@
+---
+title: "Data Mining Week 1"
+author: "Aaron Wright"
+date: "07/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(caret)
+library(datasets)
+library(partykit)
+library(e1071)
+library(C50)
+library(RWeka)
+library(tidyverse)
+library(rattle)
+library(readr)
+```
+
+## The WeatherPlay dataset
+
+Let's view the `WeatherPlay` data set. This is part of the `partykit` library.
+
+```{r}
+view(WeatherPlay)
+head(WeatherPlay)
+```
+Checking the dimensions and attributes of the data
+
+```{r}
+glimpse(WeatherPlay)
+```
+
+Let's just return the names of the columns and dimensions, and save to variables
+
+```{r}
+columns <- names(WeatherPlay)
+col_total <- ncol(WeatherPlay)
+row_total <- nrow(WeatherPlay)
+
+columns
+col_total
+row_total
+```
+
+Summary of data
+
+```{r}
+summary(WeatherPlay)
+```
+### Applying J48 Classification Tree to the WeatherData data set
+
+`train` is a method from the `caret` library that we can use to fit a model to the training data.
+
+`play ~.` instructs the model to predict play column (target variable) using all other columns (feature variables).
+
+`data` parameter tells us which data frame to use.
+
+`method` tells it which tree building algorithm to use.
+
+`trControl` is optional. This provides instructions on how to train the model. In the below case, we are saying to do a Cross-Validation repeated 5 times.
+
+```{r}
+# Set random number seed so that we get the same result each time we run the script
+set.seed(1)
+
+# How we want to train the model
+control <- trainControl(method = "cv", number = 5)
+
+# Let's fit a model to the training data, using the J48 tree building algorithm
+j48Tree <- train(play  ~., data = WeatherPlay, method = "J48", trControl = control)
+
+# Let's print a summary of our final model
+summary(j48Tree$finalModel)
+```
+
+In the data set, there are 9 `yes` and 5 `no`. However, the confusion matrix above tells us that our model predicted 8 `yes` and 6 `no`.
+
+```{r}
+plot(j48Tree$finalModel)
+```
+
+### Apply C5.0 Tree Model to WeatherData
+
+C5.0 is another algorithm for classification trees.
+
+```{r}
+set.seed(1)
+control <- trainControl(method = "cv", number = 5)
+c5Tree <- train(play ~., data = WeatherPlay, method = "C5.0Tree", trControl = control)
+
+summary(c5Tree$finalModel)
+```
+
+We can see our results are slightly different using this algorithm.
+
+**Random Note**
+
+When deciding what feature variable should be at the top of the tree (aka the Root) we look at something called **Purity**. 
+
+So for example, if we were only looking `windy` and `play` in our training data, we would place `windy` as the Root. We would then create two branches: **True** and **False**. Then, we would create a **node** for each of these. Then going through each record in our data set, if `windy` was **True** and `play` was **True** we would then look at the node branching off of **True** and add 1 next to **True** (for `play`). We would do this for all records. If neight of the leaf nodes are 100% **True Play** or 100% **False Play** - then they are both considered **Impure**.
+
+For this data set, this is done for all variables, not just `windy`. We may find none of them are **pure**. Thus, we need a way to measure and compare **impurity** so we know which order to place the decision nodes.
+
+We would calculate `Gini` impurity for each leaf:
+
+Gini Impurity = `1 - (probability of True)squared - (probability of False)squared`
+
+We would do this for both leaf nodes for `windy` as an example.
+
+We would then take the weighted average of these two results to give the total. We would then do this for the other feature variables.
+
+Once all this is done, we would look for the feature variable that has the **lowest** Gini impurity and use that as the root of the tree (in this case, it may be `windy`)
+
+We would then look at each node coming off of the root `windy` node, and see how well the other variables do at further breaking this down. So for the `windy True` node, we may have 10 **True** and 2 **False** (as an example). We would then follow the same Gini Impurity process above for these values, and identify the variable with the lowest impurity.
+
+Something becomes a leaf node it if has the lowest Gini Impurity Score.
+
+If we're dealing with numerical data, the process would be slightly different. We would sort the data. Then calculate the average of each adjacent value. So for example, our first two values in the column may be 155 and 180. The average here would be 167.5. We would therefore put 165 has the root, with one branch being under 167.5, the other being above. We can then calculate the impurity score. We would do this for ever single average that we've calculated, following the same procedure as above. If we found that > or < 167.5 had the lowest Gini value, we would use this as the cutoff value when comparing against other variables.
+
+Ranked data is similar to numeric data. We calculate impurity scores for all ranks (e.g. less than or equal to 1, or less than or equal to 2, etc).
+
+For colors, we calculate an impurity score for each color, as well as each combination of colors.
+
+There's more to it than this, but we'll leave it there for now.
+
+### Using an Association
+
+One alternative to a decision tree model is a decision tree rules model. One such model is the `C5.0Rules` algorithm
+
+```{r}
+set.seed(1)
+control <- trainControl(method = "cv", number = 5)
+c5Rules <- train(play ~., data = WeatherPlay, method = "C5.0Rules", trControl = control)
+
+summary(c5Rules$finalModel)
+```
+
+### using the Segmentation Data data set.
+
+Load the data set and examine it.
+
+```{r}
+data(segmentationData)
+view(segmentationData)
+glimpse(segmentationData)
+```
+
+```{r}
+head(segmentationData)
+```
+
+Let's remove the `Cell` Column, as it's just a unique ID and doesn't really give us anything.
+
+```{r}
+segmentationData$Cell <- NULL
+head(segmentationData)
+```
+
+This dataset actually has a column, as you can see, which specified which record should be considered training data, and which should be considered test data. Let's split the data into two separate data frames based on this.
+
+```{r}
+STrain <- segmentationData %>% filter(Case == "Train")
+STest <- segmentationData %>% filter(Case == "Test")
+```
+
+We can now remove the `Case` column.
+
+```{r}
+STrain$Case <- NULL
+STest$Case <- NULL
+```
+
+Let's now build a J48 model from this data.
+
+```{r}
+set.seed(1)
+control <- trainControl(method = 'cv', number = 5)
+STree <- train(Class ~., data = STrain, method = 'J48', trControl = control)
+
+summary(STree$finalModel)
+```
+
+Results seem pretty good. The model correctly classifies instances 90% of the time.
+
+```{r}
+summary(STree$results)
+```
+
+```{r}
+plot(STree$finalModel)
+```
+It's normal for our model to perform well on our training dataset. However, on unseen data, the model is likely to perform worse. This is why we created a separate testing dataset. 
+
+1. Use the model to predict the target variable for the test set.
+1. Compare this with the actual target variable values.
