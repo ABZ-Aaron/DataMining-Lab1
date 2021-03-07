@@ -196,3 +196,169 @@ It's normal for our model to perform well on our training dataset. However, on u
 
 1. Use the model to predict the target variable for the test set.
 1. Compare this with the actual target variable values.
+
+```{r}
+TestResults <- predict(STree, newdata = STest, type = "raw")
+confusionMatrix(TestResults, STest$Class)
+```
+
+### Other DataSets
+
+We have some datasets in our current working directory
+
+```{r}
+lenses <- read.csv("contactLenses.csv")
+diabetes <- read.csv("diabetes.csv")
+```
+
+```{r}
+glimpse(lenses)
+```
+
+In the contact lenses dataset, the target variable `contactLenses` has three possible values: `none`, `soft`, or `hard`. Thus, the confusion matrix with be 3 x 3.
+
+```{r}
+set.seed(1)
+control <- trainControl(method = 'cv', number = 5)
+j48Contacts <- train(contactLenses ~ ., data = lenses, method = 'J48', metric = "Accuracy", trControl = control)
+
+summary(j48Contacts$finalModel)
+```
+```{r}
+plot(j48Contacts$finalModel)
+```
+
+```{r}
+set.seed(1)
+control <- trainControl(method = 'cv', number = 5)
+c5TreeContacts <- train(contactLenses ~., data = lenses, method = 'C5.0Tree', metric = "Accuracy", trControl = control)
+
+summary(c5TreeContacts$finalModel)
+```
+
+```{r}
+set.seed(1)
+control <- trainControl(method = "cv", number = 5)
+c5RulesContacts <- train(contactLenses ~., data = lenses, method = "C5.0Rules", metric = "Accuracy", trControl = control)
+
+summary(c5RulesContacts$finalModel)
+```
+
+It looks like the 3 algorithms implemented gave us the same results.
+
+Let's now look at the diabetes dataset
+
+```{r}
+set.seed(1)
+control <- trainControl(method = "cv", number = 5)
+j48Diabetes <- train(class ~., data = diabetes, metric = "Accuracy", method = "J48", trControl = control)
+
+summary(j48Diabetes$finalModel)
+```
+
+```{r}
+plot(j48Diabetes$finalModel)
+```
+
+```{r}
+set.seed(1)
+control = trainControl(method = "cv", number = 5)
+c5TreeDiabetes <- train(class ~., data = diabetes, method = "C5.0Tree", metric = "Accuracy", trControl = control)
+
+summary(c5TreeDiabetes$finalModel)
+```
+
+```{r}
+set.seed(1)
+control <- trainControl(method = "cv", number = 5)
+c5RulesDiabetes <- train(class ~., data = diabetes, method = "C5.0Rules", metric = "Accuracy", trControl = control)
+
+summary(c5RulesDiabetes$finalModel)
+```
+
+### Cart
+
+CART is another algorithm for implementing decision trees with uses Gini index instead of information gain (we already talked a bit about Gini Index).
+
+```{r}
+set.seed(1)
+control <- trainControl(method = "cv", number = 5)
+rPart <- train(class ~., data = diabetes, method = "rpart", metric = "Accuracy", trControl = control)
+
+fancyRpartPlot(rPart$finalModel)
+```
+Let's now look at the heart data.
+
+```{r}
+heart <- read.csv("heart.csv", stringsAsFactors =  TRUE)
+glimpse(heart)
+```
+
+If we tried to run a classification model using something like `J48` this would fail. It will fail because the dataset contains missing values, and also because the *num* attribute is encoded as 1 and 0, which R interprets and numerical rather than a category.
+
+Let's therefore convert *num* into a category
+
+```{r}
+# The as.factor will covert the numbers to categories
+heart$num <- as.factor(heart$num)
+```
+
+Let's now remove the `NA` values. To remove all of them, we can just use `na.omit`
+
+```{r}
+noNAHeart <- na.omit(heart)
+```
+
+```{r}
+set.seed(1)
+j48NTree = train(num ~., data = noNAHeart, method = "J48", trControl = trainControl(method = "cv", number = 5))
+
+summary(j48NTree$finalModel)
+```
+
+```{r}
+plot(j48NTree$finalModel)
+```
+
+### Linear Regression
+
+```{r}
+# Loading the diamonds dataset
+data(diamonds)
+view(diamonds)
+glimpse(diamonds)
+```
+
+Let's predict the price using **Linear Regression**
+
+```{r}
+model1 <- lm(price ~ carat, data = diamonds)
+summary(model1)
+```
+
+The model has r-squared of **.85** meaning 85% of the variance is explained by carat.
+
+Let's try to improve this.
+
+```{r}
+model2 <- lm(price ~ carat + depth, data = diamonds)
+summary(model2)
+```
+
+Not much of an improvement here. Maybe the categorical features have more influence. It's good to know that the R version of linear regression automatically encodes categories to make them numerical.
+
+```{r}
+model3 <- lm(price ~ carat + depth + clarity, data = diamonds)
+summary(model3)
+```
+
+Now we're looking at an r-squared closed to 90!
+
+Let's throw everything at the linear model and see what we get
+
+```{r}
+model4 <- lm(price ~., data = diamonds)
+summary(model4)
+```
+
+That's all for now!
